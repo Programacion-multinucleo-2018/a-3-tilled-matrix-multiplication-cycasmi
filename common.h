@@ -1,3 +1,10 @@
+/* 
+ * File:   common.h
+ * Author: Cynthia Castillo
+ *
+ * Created on 2 de septiembre de 2018, 12:48 AM
+ */
+
 #pragma once
 #ifndef COMMON_H
 #define COMMON_H
@@ -17,4 +24,6 @@ static inline void _safe_cuda_call(cudaError err, const char* msg, const char* f
 
 #define SAFE_CALL(call,msg) _safe_cuda_call(call,msg,__FILE__,__LINE__)
 
-#endif
+#endif /* COMMON_H */
+
+

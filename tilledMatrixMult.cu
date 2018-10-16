@@ -14,7 +14,7 @@ using namespace std;
 
 using namespace std;
 #define N 2000
-#define TILE 16
+#define TILE 8
 
 //Initialize data to random numbers
 void initRand(float *mat, const float size)
@@ -52,9 +52,10 @@ void multMatrixOnHost(float *A, float *B, float *C, const int cols,
 //Tilling on matrix multiplication
 __global__ void tilledMatrixMult(float *A, float *B, float *C, int cols, int rows) 
 {
-    //Indices for the  Matrix
-    unsigned int ix = threadIdx.x + blockIdx.x * TILE;
-    unsigned int iy = threadIdx.y + blockIdx.y * TILE;
+    //Indices for the  Matrices
+    //block index * threads per block + current thread 
+    unsigned int ix = blockIdx.x * blockDim.x + threadIdx.x;
+    unsigned int iy = blockIdx.y * blockDim.y + threadIdx.y;
 
     //Indices for the Tiles
     unsigned int x = threadIdx.x;
@@ -64,27 +65,26 @@ __global__ void tilledMatrixMult(float *A, float *B, float *C, int cols, int row
     __shared__ float tileA[TILE][TILE];
     __shared__ float tileB[TILE][TILE];
 
-
+    /*
     //Initializing shared memory matrices
-    for(int i = 0; i < TILE; i ++) 
-    {
-        for(int j = 0; j < TILE; j++)
-        {
-            tileA[i][j] = 0;
-            tileB[i][j] = 0;
-        }
-    }
-
+    tileA[i][j] = 0;
+    tileB[i][j] = 0;
+    */
     float cumulativeSum = 0;
-    for(int i = (TILE + cols - 1)/TILE; i >= 0; i--) 
+    //Tile movement (tile jumps)
+    for(int i = 0; i < (TILE + cols - 1)/TILE; i++) 
     {
         if((i * TILE + x) < cols && (iy < rows))
             tileA[y][x] = A[(iy*rows) + (i*TILE+x)];
+        else
+            tileA[y][x] = 0.0;
 
         if((i * TILE + y) < rows && (ix < cols))
             tileB[y][x] = B[(i*TILE+y) * cols + ix];
+        else
+            tileB[y][x] = 0.0;
 
-        //Wait for all threads to return their result
+        //Wait for all threads to fill the tile
         __syncthreads();
 
         for(int j = 0; j < TILE; j++)
@@ -95,7 +95,7 @@ __global__ void tilledMatrixMult(float *A, float *B, float *C, int cols, int row
     }
 
     if(ix < cols && iy < rows) 
-        C[ix*rows+iy] = cumulativeSum;
+        C[iy*cols+ix] = cumulativeSum;
 }
 
 void checkResult(float *hostRef, float *gpuRef, const int nxy)
@@ -138,6 +138,7 @@ int main(int argc, char **argv)
     int nxy = nx * ny;
     int nBytes = nxy * sizeof(int);
     printf("Matrix size: nx %d ny %d\n", nx, ny);
+    printf("Tile size: nx %d ny %d\n", TILE, TILE);
 
     // malloc host memory
     float *h_A, *h_B, *hostRef, *gpuRef;
@@ -197,7 +198,7 @@ int main(int argc, char **argv)
 
     // check device results
     checkResult(hostRef, gpuRef, nxy);
-    printf("FUNCIONA");
+    //printf("FUNCIONA");
 
     // free device global memory
     SAFE_CALL(cudaFree(d_MatA), "Error freeing memory");
